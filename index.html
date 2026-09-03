@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>우리집 자산관리 대시보드</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#EEF1EC; --paper:#FFFFFF; --ink:#262521; --ink-soft:#736F60; --ink-faint:#A6A192;
+    --line:#DDD9CB; --line-soft:#E8E5D9;
+    --teal:#1F4B43; --teal-soft:#E3ECE8;
+    --amber:#B8853E; --amber-soft:#F3E9D8;
+    --violet:#5B6EAE; --violet-soft:#E7E9F4;
+    --up:#AB4B3B; --down:#3C6E96;
+    --sec-cashbond:#A9A08C; --sec-dividend:#1F4B43; --sec-largecap:#4C7A93; --sec-growth:#7C9E80; --sec-other:#9D93B8;
+    --sec-cashbond-sp:#B5D4F4; --sec-dividend-sp:#85B7EB; --sec-largecap-sp:#378ADD; --sec-growth-sp:#185FA5; --sec-other-sp:#0C447C;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI", sans-serif;
+    line-height:1.5; -webkit-font-smoothing:antialiased;
+  }
+  #app{ max-width:980px; margin:0 auto; padding:28px 20px 80px; }
+
+  header{ display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap;
+    padding-bottom:20px; margin-bottom:24px; border-bottom:1px solid var(--line); }
+  header .title-block h1{ font-size:24px; font-weight:700; margin:0 0 4px; letter-spacing:-0.3px; }
+  header .title-block p{ margin:0; font-size:13px; color:var(--ink-soft); }
+  .btn-row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  button{ font-family:inherit; cursor:pointer; border-radius:7px; font-size:13.5px; padding:9px 14px;
+    border:1px solid var(--line); background:var(--paper); color:var(--ink); transition:background .15s ease, border-color .15s ease; }
+  button:hover{ border-color:var(--ink-faint); }
+  button.primary{ background:var(--teal); color:#fff; border-color:var(--teal); }
+  button.primary:hover{ background:#173a33; }
+  button.ghost{ background:transparent; }
+  button.small{ padding:6px 10px; font-size:12.5px; }
+  button:disabled{ opacity:.45; cursor:not-allowed; }
+
+  .empty-state{ text-align:center; padding:70px 20px; color:var(--ink-soft);
+    background:var(--paper); border:1px dashed var(--line); border-radius:10px; }
+  .empty-state h2{ font-size:19px; color:var(--ink); margin:0 0 8px; }
+  .empty-state p{ font-size:13.5px; margin:0 0 20px; }
+
+  section.panel{ background:var(--paper); border:1px solid var(--line); border-radius:10px; padding:22px 24px; margin-bottom:16px; }
+  section.panel h2{ font-size:15.5px; font-weight:600; margin:0 0 16px; color:var(--ink);
+    display:flex; align-items:center; justify-content:space-between; }
+  section.panel h2 .sub{ font-size:12px; font-weight:400; color:var(--ink-faint); }
+
+  .kpi-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:16px; }
+  .kpi-card{ background:var(--paper); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  .kpi-card .klabel{ font-size:12px; color:var(--ink-soft); margin-bottom:6px; }
+  .kpi-card .kval{ font-size:19px; font-weight:700; }
+  .kpi-card .kval.up{ color:var(--up); }
+  .kpi-card .kval.down{ color:var(--down); }
+  .kpi-card .kspark{ margin-top:6px; }
+  .kpi-card .kna{ font-size:12px; color:var(--ink-faint); margin-top:4px; }
+
+  .trend-wrap{ overflow-x:auto; }
+
+  .tier{ display:flex; width:100%; border-radius:4px; overflow:hidden; }
+  .tier > div{ height:100%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:500; white-space:nowrap; overflow:hidden;}
+  .legend-wrap{ display:flex; flex-wrap:wrap; gap:8px 16px; margin-top:9px; }
+  .leg{ display:flex; align-items:center; gap:5px; font-size:12px; color:var(--ink-soft); }
+  .leg .d{ width:8px; height:8px; border-radius:2px; flex-shrink:0; }
+  .leg b{ color:var(--ink); font-weight:600; }
+  .leg .of-total{ color:var(--ink-faint); font-size:10.5px; }
+
+  .zoom-caption{ font-size:11.5px; color:var(--ink-faint); margin-bottom:6px; }
+  .legend-line{
+    display:flex; align-items:center; gap:5px; font-size:11px; color:var(--ink-soft);
+    white-space:nowrap; overflow-x:auto; padding-bottom:3px; margin-top:6px;
+  }
+  .legend-line.legend-line-lg{ font-size:13.5px; color:var(--ink); margin-top:0; margin-bottom:10px; }
+  .legend-line-lg b{ font-weight:700; }
+  .legend-line-lg .amt-sub{ font-size:11px; color:var(--ink-faint); font-weight:400; }
+  .legend-line .d{ width:7px; height:7px; border-radius:2px; flex-shrink:0; display:inline-block; }
+  .legend-line .who{ font-weight:700; color:var(--ink); flex-shrink:0; }
+  .legend-line .sep{ color:var(--ink-faint); }
+  .legend-line b{ color:var(--ink); font-weight:600; }
+
+  .retire-top{ display:flex; justify-content:space-between; align-items:flex-end; gap:20px; flex-wrap:wrap; margin-bottom:10px;}
+  .retire-pct{ font-size:34px; font-weight:700; color:var(--teal); }
+  .retire-pct .unit{ font-size:16px; font-weight:600; }
+  .retire-sub{ font-size:12.5px; color:var(--ink-soft); }
+  .gauge{ width:100%; height:12px; background:var(--line-soft); border-radius:6px; overflow:hidden; margin:12px 0 6px; }
+  .gauge .fill{ height:100%; background:linear-gradient(90deg,#4C7A93,#1F4B43); border-radius:6px; }
+  .gauge-labels{ display:flex; justify-content:space-between; font-size:12px; color:var(--ink-faint); }
+  .divider{ border-top:1px solid var(--line-soft); margin:18px 0; }
+  .retire-facts{ display:flex; gap:22px; flex-wrap:wrap; margin-top:14px; font-size:12.5px; color:var(--ink-soft); }
+  .retire-facts b{ color:var(--ink); }
+
+  .modal-overlay{ position:fixed; inset:0; background:rgba(30,28,22,.45); display:flex; align-items:center; justify-content:center; padding:20px; z-index:50; }
+  .modal-overlay.hidden{ display:none; }
+  .modal{ background:var(--paper); border-radius:12px; max-width:640px; width:100%; max-height:88vh; overflow-y:auto; padding:26px 26px 22px; }
+  .modal h3{ font-size:18px; margin:0 0 4px; }
+  .modal .modal-sub{ font-size:12.5px; color:var(--ink-soft); margin:0 0 18px; }
+  .field-group{ margin-bottom:18px; }
+  .field-group .fg-title{ font-size:12.5px; font-weight:600; color:var(--teal); margin-bottom:8px; padding-bottom:6px; border-bottom:1px solid var(--line-soft); }
+  .field-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px 14px; }
+  .field{ display:flex; flex-direction:column; gap:4px; }
+  .field label{ font-size:12.5px; color:var(--ink-soft); }
+  .field input{ font-family:inherit; font-size:14px; padding:8px 10px; border:1px solid var(--line); border-radius:6px; background:#FBFAF6; color:var(--ink); }
+  .field input:focus{ outline:none; border-color:var(--teal); background:#fff; }
+  .field .field-hint{ font-size:11px; color:var(--ink-faint); }
+  .field .subtotal{ grid-column:1/-1; font-size:12.5px; color:var(--ink-soft); text-align:right; }
+  .modal-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:6px; }
+  .err-banner{ background:#F7E3DE; color:#7A2E1E; border-radius:8px; padding:10px 12px; font-size:12.5px; margin-bottom:14px; display:none; }
+  .err-banner.show{ display:block; }
+
+  @media (max-width:720px){
+    .kpi-grid{ grid-template-columns:repeat(2,1fr); }
+    .field-grid{ grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="title-block">
+      <h1>우리집 자산관리</h1>
+      <p id="headerSub">매달 말일, 자산이 어떻게 움직였는지 한눈에</p>
+    </div>
+    <div class="btn-row">
+      <button class="ghost small" id="btnSettings">은퇴 설정</button>
+      <button class="ghost small" id="btnBackupSave">백업 저장</button>
+      <button class="ghost small" id="btnBackupLoad">백업 불러오기</button>
+      <button class="ghost small" id="btnExport">엑셀로 저장</button>
+      <button class="primary" id="btnEntry">이번달 입력하기</button>
+    </div>
+  </header>
+  <div class="err-banner" id="storageBanner" style="margin-bottom:16px;">이 브라우저에서는 데이터를 저장할 수 없어요 (프라이빗 브라우징 등). 입력한 내용은 새로고침하면 사라지니, 자주 "백업 저장"을 눌러 파일로 보관하세요.</div>
+  <main id="dashboard"></main>
+</div>
+
+<input type="file" id="backupFileInput" accept="application/json,.json" style="display:none">
+
+<!-- 월간 입력 모달 -->
+<div class="modal-overlay hidden" id="entryModal">
+  <div class="modal">
+    <h3>월말 자산 입력</h3>
+    <p class="modal-sub">지난달 값이 자동으로 채워져 있어요. 바뀐 부분만 수정하면 됩니다.</p>
+    <div class="err-banner" id="entryErr"></div>
+
+    <div class="field-group">
+      <div class="fg-title">기준월</div>
+      <div class="field-grid"><div class="field"><label>기준 연월</label><input type="month" id="fMonth"></div></div>
+    </div>
+    <div class="field-group">
+      <div class="fg-title">이번달 현금흐름</div>
+      <div class="field-grid">
+        <div class="field"><label>월급 (세후, 부부 합산)</label><input type="number" id="fSalary" placeholder="0"></div>
+        <div class="field"><label>생활비 지출</label><input type="number" id="fLiving" placeholder="0"></div>
+      </div>
+    </div>
+    <div class="field-group">
+      <div class="fg-title">부동산 <span style="font-weight:400;color:var(--ink-faint)">(보통 분기 1회만 갱신)</span></div>
+      <div class="field-grid"><div class="field"><label>부동산 시가 합계</label><input type="number" id="fRealEstate" placeholder="0"></div></div>
+    </div>
+    <div class="field-group">
+      <div class="fg-title">본인 주식계좌 — 섹터별 평가액</div>
+      <div class="field-grid">
+        <div class="field"><label>현금/채권</label><input type="number" id="fMyCashBond" placeholder="0"></div>
+        <div class="field"><label>배당ETF</label><input type="number" id="fMyDividendEtf" placeholder="0"></div>
+        <div class="field"><label>대형주</label><input type="number" id="fMyLargeCap" placeholder="0"></div>
+        <div class="field"><label>성장주</label><input type="number" id="fMyGrowth" placeholder="0"></div>
+        <div class="field"><label>기타</label><input type="number" id="fMyOther" placeholder="0"></div>
+        <div class="subtotal">본인 주식 합계: <b id="myTotalVal">0원</b></div>
+      </div>
+    </div>
+    <div class="field-group">
+      <div class="fg-title">배우자 주식계좌 — 섹터별 평가액</div>
+      <div class="field-grid">
+        <div class="field"><label>현금/채권</label><input type="number" id="fSpCashBond" placeholder="0"></div>
+        <div class="field"><label>배당ETF</label><input type="number" id="fSpDividendEtf" placeholder="0"></div>
+        <div class="field"><label>대형주</label><input type="number" id="fSpLargeCap" placeholder="0"></div>
+        <div class="field"><label>성장주</label><input type="number" id="fSpGrowth" placeholder="0"></div>
+        <div class="field"><label>기타</label><input type="number" id="fSpOther" placeholder="0"></div>
+        <div class="subtotal">배우자 주식 합계: <b id="spTotalVal">0원</b></div>
+      </div>
+    </div>
+    <div class="field-group" style="background:var(--teal-soft); border-radius:8px; padding:12px 14px; margin-bottom:8px;">
+      <div style="display:flex; justify-content:space-between; font-size:14px; font-weight:600;">
+        <span>이번달 예상 순자산</span><span id="previewNetWorth">0원</span>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="ghost" id="btnEntryCancel">취소</button>
+      <button class="primary" id="btnEntrySave">저장하기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 은퇴 설정 모달 -->
+<div class="modal-overlay hidden" id="settingsModal">
+  <div class="modal">
+    <h3>은퇴 준비도 설정</h3>
+    <p class="modal-sub">한 번 입력해두면 매달 자동으로 준비율을 계산해요.</p>
+    <div class="field-group">
+      <div class="fg-title">시점</div>
+      <div class="field-grid">
+        <div class="field"><label>현재 나이</label><input type="number" id="sCurrentAge"></div>
+        <div class="field"><label>은퇴 예정 나이</label><input type="number" id="sRetireAge"></div>
+        <div class="field"><label>은퇴 후 예상 기간 (년)</label><input type="number" id="sRetireYears"></div>
+        <div class="field"><label>연금 월 수령 예상액</label><input type="number" id="sPension"></div>
+        <div class="field"><label>예상 인플레이션율 (연, %)</label><input type="number" id="sInflation" step="0.1"></div>
+      </div>
+    </div>
+    <div class="field-group">
+      <div class="fg-title">은퇴 후 월 생활비 가정</div>
+      <div class="field-grid">
+        <div class="field"><label>기본 생활비 (월)</label><input type="number" id="sBasic"></div>
+        <div class="field"><label>의료비 (월)</label><input type="number" id="sMedical"></div>
+        <div class="field"><label>해외여행 (연간 총액)</label><input type="number" id="sTravel"><span class="field-hint" id="sTravelHint">= 월 0원</span></div>
+        <div class="field"><label>취미·운동 (월)</label><input type="number" id="sGolf"></div>
+        <div class="field"><label>경조사·기타·비상금 (월)</label><input type="number" id="sEtc"></div>
+      </div>
+    </div>
+    <div class="field-group">
+      <label style="display:flex; align-items:center; gap:8px; font-size:13.5px; color:var(--ink-soft);">
+        <input type="checkbox" id="sIncludeRE" style="width:auto;"> 은퇴자산 계산에 부동산 시가도 포함하기
+      </label>
+    </div>
+    <div class="modal-actions">
+      <button class="ghost" id="btnSettingsCancel">취소</button>
+      <button class="primary" id="btnSettingsSave">저장하기</button>
+    </div>
+  </div>
+</div>
+<script>
+// core.js — 순수 계산/포맷 로직 (DOM 의존 없음, node로 단위테스트 가능)
+"use strict";
+
+const SECTOR_KEYS = ['cashBond', 'dividendEtf', 'largeCap', 'growth', 'other'];
+const SECTOR_LABELS = { cashBond: '현금/채권', dividendEtf: '배당ETF', largeCap: '대형주', growth: '성장주', other: '기타' };
+const SECTOR_COLORS = { cashBond: '#A9A08C', dividendEtf: '#1F4B43', largeCap: '#4C7A93', growth: '#7C9E80', other: '#9D93B8' };
+
+const DEFAULT_SETTINGS = Object.freeze({
+  currentAge: 52, retireAge: 60, retireYears: 30, pensionMonthly: 2000000,
+  inflationRate: 2.5,
+  lifestyle: { basic: 2500000, medical: 400000, travelAnnual: 6000000, golfMonthly: 500000, etcMonthly: 800000 },
+  includeRealEstate: false
+});
+
+function emptyStock() {
+  const o = {};
+  SECTOR_KEYS.forEach(k => { o[k] = 0; });
+  return o;
+}
+
+function num(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function formatWon(n) {
+  n = Math.round(num(n));
+  const neg = n < 0;
+  n = Math.abs(n);
+  let out;
+  if (n >= 1e12) {
+    const jo = Math.floor(n / 1e12);
+    const eok = Math.round((n % 1e12) / 1e8);
+    out = jo.toLocaleString('ko-KR') + '조' + (eok > 0 ? ' ' + eok.toLocaleString('ko-KR') + '억원' : '원');
+  } else if (n >= 1e8) {
+    const eok = Math.floor(n / 1e8);
+    const man = Math.round((n % 1e8) / 1e4);
+    out = eok.toLocaleString('ko-KR') + '억' + (man > 0 ? ' ' + man.toLocaleString('ko-KR') + '만원' : '원');
+  } else if (n >= 1e4) {
+    out = Math.round(n / 1e4).toLocaleString('ko-KR') + '만원';
+  } else {
+    out = n.toLocaleString('ko-KR') + '원';
+  }
+  return (neg ? '-' : '') + out;
+}
+
+function formatDelta(n) {
+  n = Math.round(num(n));
+  if (n === 0) return '변동 없음';
+  return (n > 0 ? '+' : '-') + formatWon(Math.abs(n));
+}
+
+function stockTotal(entry, who) {
+  if (!entry || !entry[who]) return 0;
+  let s = 0;
+  SECTOR_KEYS.forEach(k => { s += num(entry[who][k]); });
+  return s;
+}
+
+function netWorth(entry) {
+  if (!entry) return 0;
+  return num(entry.realEstate) + stockTotal(entry, 'myStock') + stockTotal(entry, 'spouseStock');
+}
+
+function sortedMonths(entries) {
+  return Object.keys(entries || {}).sort();
+}
+
+function monthLabel(k) {
+  const parts = k.split('-');
+  return parts[0] + '.' + parts[1];
+}
+
+function addMonths(key, delta) {
+  const [y, m] = key.split('-').map(Number);
+  const total = (y * 12 + (m - 1)) + delta;
+  const ny = Math.floor(total / 12);
+  const nm = (total % 12) + 1;
+  return ny + '-' + String(nm).padStart(2, '0');
+}
+
+function nextMonthKey(entries) {
+  const months = sortedMonths(entries);
+  if (months.length === 0) {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  }
+  const last = months[months.length - 1];
+  return addMonths(last, 1);
+}
+
+// 전월대비 / 1년전대비 등 대시보드 파생 지표 계산
+function computeDashboardMetrics(entries, settings) {
+  const months = sortedMonths(entries);
+  if (months.length === 0) return null;
+
+  const latestKey = months[months.length - 1];
+  const latest = entries[latestKey];
+  const prevKey = months.length > 1 ? months[months.length - 2] : null;
+  const prev = prevKey ? entries[prevKey] : null;
+
+  const nw = netWorth(latest);
+  const momDelta = prev ? nw - netWorth(prev) : null;
+
+  // 1년 전(정확히 12개월 전 키)이 존재할 때만 YoY 계산
+  const yoyKey = addMonths(latestKey, -12);
+  const yoyEntry = entries[yoyKey] || null;
+  const yoyDelta = yoyEntry ? nw - netWorth(yoyEntry) : null;
+
+  const reDelta = prev ? num(latest.realEstate) - num(prev.realEstate) : 0;
+  const stockDelta = prev
+    ? (stockTotal(latest, 'myStock') + stockTotal(latest, 'spouseStock')) - (stockTotal(prev, 'myStock') + stockTotal(prev, 'spouseStock'))
+    : 0;
+  const savings = num(latest.salary) - num(latest.living);
+
+  const reVal = num(latest.realEstate);
+  const myVal = stockTotal(latest, 'myStock');
+  const spVal = stockTotal(latest, 'spouseStock');
+  const allocTotal = reVal + myVal + spVal;
+
+  const readiness = computeRetirementReadiness(latest, settings);
+
+  return {
+    latestKey, latest, prevKey, prev,
+    netWorth: nw, momDelta, yoyDelta, yoyAvailable: !!yoyEntry,
+    reDelta, stockDelta, savings,
+    reVal, myVal, spVal, allocTotal,
+    readiness
+  };
+}
+
+function computeRetirementReadiness(latestEntry, settings) {
+  const st = settings || DEFAULT_SETTINGS;
+  const lc = st.lifestyle || DEFAULT_SETTINGS.lifestyle;
+  const monthlyLifestyle = num(lc.basic) + num(lc.medical) + num(lc.travelAnnual) / 12 + num(lc.golfMonthly) + num(lc.etcMonthly);
+  const pension = num(st.pensionMonthly);
+  const monthlyGap = Math.max(0, monthlyLifestyle - pension); // 오늘 기준(현재가치) 월 부족분
+  const annualGap = monthlyGap * 12; // 오늘 기준 연간 부족분
+
+  const yearsToRetireClamped = Math.max(0, num(st.retireAge) - num(st.currentAge));
+  const inflationRate = Math.max(0, num(st.inflationRate)) / 100;
+  const inflationFactor = Math.pow(1 + inflationRate, yearsToRetireClamped); // 은퇴 시점까지 물가 복리 반영
+  const annualGapAtRetirement = annualGap * inflationFactor; // 은퇴 "시점" 기준 연간 부족분(미래가치)
+
+  const years = Math.max(1, num(st.retireYears) || 1);
+  const targetFund = annualGapAtRetirement * years;
+
+  const financial = latestEntry ? (stockTotal(latestEntry, 'myStock') + stockTotal(latestEntry, 'spouseStock')) : 0;
+  const currentFund = financial + (st.includeRealEstate && latestEntry ? num(latestEntry.realEstate) : 0);
+
+  let readinessPct;
+  if (targetFund > 0) {
+    readinessPct = (currentFund / targetFund) * 100;
+  } else {
+    // 목표자금이 0(연금이 생활비를 충당) → 이미 준비 완료로 취급, 무한대 방지
+    readinessPct = 100;
+  }
+
+  return {
+    monthlyLifestyle, pension, monthlyGap, annualGap,
+    inflationRate: inflationRate * 100, inflationFactor, annualGapAtRetirement,
+    targetFund, currentFund, readinessPct, yearsToRetire: yearsToRetireClamped
+  };
+}
+
+// 백업 JSON 유효성 검사 — 구조가 우리 앱의 것인지 확인
+function validateBackupShape(obj) {
+  if (!obj || typeof obj !== 'object') return { ok: false, reason: '파일 형식이 올바르지 않습니다.' };
+  if (typeof obj.entries !== 'object' || obj.entries === null) return { ok: false, reason: 'entries 항목이 없습니다.' };
+  if (typeof obj.settings !== 'object' || obj.settings === null) return { ok: false, reason: 'settings 항목이 없습니다.' };
+  const keys = Object.keys(obj.entries);
+  for (const k of keys) {
+    if (!/^\d{4}-\d{2}$/.test(k)) return { ok: false, reason: '월 형식이 올바르지 않은 항목이 있습니다: ' + k };
+    const e = obj.entries[k];
+    if (!e || typeof e !== 'object') return { ok: false, reason: k + ' 항목이 비어있습니다.' };
+  }
+  return { ok: true };
+}
+
+if (typeof module !== 'undefined') {
+  module.exports = {
+    SECTOR_KEYS, SECTOR_LABELS, SECTOR_COLORS, DEFAULT_SETTINGS,
+    emptyStock, num, formatWon, formatDelta, stockTotal, netWorth,
+    sortedMonths, monthLabel, addMonths, nextMonthKey,
+    computeDashboardMetrics, computeRetirementReadiness, validateBackupShape
+  };
+}
+
+</script>
+<script>
+(function(){
+"use strict";
+
+var LS_ENTRIES_KEY = 'assetDash_entries_v2';
+var LS_SETTINGS_KEY = 'assetDash_settings_v2';
+
+var memoryStore = {};
+var storageAvailable = (function(){
+  try {
+    var t = '__assetDash_probe__';
+    window.localStorage.setItem(t, '1');
+    window.localStorage.removeItem(t);
+    return true;
+  } catch (e) { return false; }
+})();
+
+function storageGet(key){
+  try {
+    if (storageAvailable) return window.localStorage.getItem(key);
+    return Object.prototype.hasOwnProperty.call(memoryStore, key) ? memoryStore[key] : null;
+  } catch (e) { return Object.prototype.hasOwnProperty.call(memoryStore, key) ? memoryStore[key] : null; }
+}
+function storageSet(key, val){
+  try {
+    if (storageAvailable) { window.localStorage.setItem(key, val); return true; }
+    memoryStore[key] = val; return true;
+  } catch (e) { memoryStore[key] = val; return false; }
+}
+
+var state = { entries: {}, settings: JSON.parse(JSON.stringify(DEFAULT_SETTINGS)) };
+
+function mergeSettings(saved){
+  // 예전 버전에서 저장된 settings에는 나중에 추가된 필드(inflationRate 등)가
+  // 없을 수 있다. 그대로 덮어쓰면 그 필드가 undefined -> 0 취급되어 조용히 무시되는 버그가 생기므로,
+  // 항상 기본값 위에 저장된 값을 얹는 방식으로 병합한다.
+  var base = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+  var savedLifestyle = (saved && saved.lifestyle) || {};
+  var merged = Object.assign({}, base, saved || {});
+  merged.lifestyle = Object.assign({}, base.lifestyle, savedLifestyle);
+  // 한때 별도 항목이었던 "비상금"이 기타 항목으로 합쳐졌다. 예전에 저장해둔 값이 있으면
+  // 조용히 사라지지 않도록 기타 항목에 더해준다.
+  if (savedLifestyle.contingencyMonthly){
+    merged.lifestyle.etcMonthly = num(merged.lifestyle.etcMonthly) + num(savedLifestyle.contingencyMonthly);
+  }
+  delete merged.lifestyle.contingencyMonthly;
+  return merged;
+}
+
+function loadState(){
+  try {
+    var e = storageGet(LS_ENTRIES_KEY);
+    state.entries = e ? JSON.parse(e) : {};
+  } catch (err) { state.entries = {}; }
+  try {
+    var s = storageGet(LS_SETTINGS_KEY);
+    state.settings = mergeSettings(s ? JSON.parse(s) : null);
+  } catch (err) { state.settings = mergeSettings(null); }
+}
+function persistEntries(){ storageSet(LS_ENTRIES_KEY, JSON.stringify(state.entries)); }
+function persistSettings(){ storageSet(LS_SETTINGS_KEY, JSON.stringify(state.settings)); }
+
+function cap(k){ return k.charAt(0).toUpperCase()+k.slice(1); }
+
+// ---------------- chart builders ----------------
+// 전체자산 한눈에 — 1단계(대분류) 색상: 부동산=핑크마젠타, 본인주식=코랄오렌지(테두리도 이 색), 배우자주식=골드옐로우
+var RE_COLOR = '#F991CC';
+var MY_STOCK_COLOR = '#F78154';
+var SP_STOCK_COLOR = '#FFD23F';
+// 2단계(섹터) 색상 — 각 부모색 그 자체를 시작점으로 두고 흰색을 섞어가며 점점 옅어지도록 계단식으로 배열
+var MY_COLORS = { cashBond:'#F78154', dividendEtf:'#F9A17F', largeCap:'#FBC0AA', growth:'#FDD9CC', other:'#FEECE5' };
+var SP_COLORS = { cashBond:'#FFD23F', dividendEtf:'#FFDD6F', largeCap:'#FFE99F', growth:'#FFF2C5', other:'#FFF8E2' };
+
+function buildSparkline(values){
+  if (!values || values.length < 2) return '';
+  var w=90,h=26,pad=2;
+  var min=Math.min.apply(null,values), max=Math.max.apply(null,values);
+  var range=(max-min)||1;
+  var stepX=(w-2*pad)/(values.length-1);
+  var pts = values.map(function(v,i){
+    var x=pad+i*stepX, y=pad+(1-(v-min)/range)*(h-2*pad);
+    return x.toFixed(1)+','+y.toFixed(1);
+  });
+  return '<svg viewBox="0 0 '+w+' '+h+'" width="'+w+'" height="'+h+'" aria-hidden="true"><polyline points="'+pts.join(' ')+'" fill="none" stroke="#1F4B43" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+}
+
+function buildStackedAreaSVG(months, data){
+  var w = Math.max(360, months.length*70), h=220, pad={l:56,r:20,t:20,b:30};
+  var totals = data.map(function(d){ return d.re+d.my+d.sp; });
+  var maxV = Math.max.apply(null, totals.concat([1]));
+  var innerW=w-pad.l-pad.r, innerH=h-pad.t-pad.b;
+  var stepX = months.length>1 ? innerW/(months.length-1) : 0;
+  function yFor(v){ return pad.t + (1-(v/maxV))*innerH; }
+  var xs = months.map(function(_,i){ return pad.l+i*stepX; });
+
+  var lvl1 = data.map(function(d){ return d.re; });
+  var lvl2 = data.map(function(d){ return d.re+d.my; });
+  var lvl3 = data.map(function(d){ return d.re+d.my+d.sp; });
+
+  function areaPath(lowArr, highArr){
+    var top = xs.map(function(x,i){ return x.toFixed(1)+','+yFor(highArr[i]).toFixed(1); });
+    var bottomRev = [];
+    for (var idx=xs.length-1; idx>=0; idx--){ bottomRev.push(xs[idx].toFixed(1)+','+yFor(lowArr[idx]).toFixed(1)); }
+    return 'M'+top.join(' L')+' L'+bottomRev.join(' L')+' Z';
+  }
+  var zeroArr = months.map(function(){ return 0; });
+  var areaRE = areaPath(zeroArr, lvl1);
+  var areaMy = areaPath(lvl1, lvl2);
+  var areaSp = areaPath(lvl2, lvl3);
+  var totalLine = xs.map(function(x,i){ return (i===0?'M':'L')+x.toFixed(1)+','+yFor(lvl3[i]).toFixed(1); }).join(' ');
+
+  var gridLines=''; for (var g=0; g<=3; g++){ var gy=pad.t+innerH*g/3; gridLines += '<line x1="'+pad.l+'" y1="'+gy.toFixed(1)+'" x2="'+(w-pad.r)+'" y2="'+gy.toFixed(1)+'" stroke="#E8E5D9" stroke-width="1"/>'; }
+  var labels=''; xs.forEach(function(x,i){ if (i===0||i===xs.length-1||i%2===0){ labels += '<text x="'+x.toFixed(1)+'" y="'+(h-8)+'" font-size="10.5" fill="#A6A192" text-anchor="middle">'+monthLabel(months[i])+'</text>'; } });
+  var lastLabel = '<text x="'+xs[xs.length-1].toFixed(1)+'" y="'+(yFor(lvl3[lvl3.length-1])-10).toFixed(1)+'" font-size="11.5" fill="#1F4B43" text-anchor="middle" font-weight="600">'+formatWon(lvl3[lvl3.length-1])+'</text>';
+
+  return '<svg viewBox="0 0 '+w+' '+h+'" width="'+w+'" height="'+h+'" style="display:block;">'+
+    gridLines+
+    '<path d="'+areaRE+'" fill="#B8853E" fill-opacity="0.55"/>'+
+    '<path d="'+areaMy+'" fill="#1F4B43" fill-opacity="0.55"/>'+
+    '<path d="'+areaSp+'" fill="#5B6EAE" fill-opacity="0.55"/>'+
+    '<path d="'+totalLine+'" fill="none" stroke="#262521" stroke-width="1.8"/>'+
+    labels + lastLabel +
+    '</svg>';
+}
+
+function buildIcicle(reVal, myStock, myTotal, spStock, spTotal){
+  var total = reVal+myTotal+spTotal;
+  if (total<=0){
+    return '<div class="tier" style="height:34px;margin-bottom:0"><div style="width:100%;background:var(--line-soft);color:var(--ink-faint)">아직 입력된 자산이 없어요</div></div>';
+  }
+  var rePct=reVal/total*100, myPct=myTotal/total*100, spPct=spTotal/total*100;
+  var stockTotal = myTotal+spTotal;
+
+  // 대분류 비중은 막대 폭에 기대지 않고 항상 보이는 범례로, 한 줄로 압축해서 먼저 보여준다.
+  var topParts = [];
+  if (reVal>0) topParts.push('<span class="d" style="background:'+RE_COLOR+'"></span>부동산 <b>'+rePct.toFixed(1)+'%</b> <span class="amt-sub">'+formatWon(reVal)+'</span>');
+  if (myTotal>0) topParts.push('<span class="d" style="background:'+MY_STOCK_COLOR+'"></span>본인주식 <b>'+myPct.toFixed(1)+'%</b> <span class="amt-sub">'+formatWon(myTotal)+'</span>');
+  if (spTotal>0) topParts.push('<span class="d" style="background:'+SP_STOCK_COLOR+'"></span>배우자주식 <b>'+spPct.toFixed(1)+'%</b> <span class="amt-sub">'+formatWon(spTotal)+'</span>');
+  var topLegend = '<div class="legend-line legend-line-lg">'+topParts.join('<span class="sep">·</span>')+'</div>';
+
+  // 본인주식/배우자주식은 부동산 비중이 크면 아주 얇아질 수 있어서, 진한 점선 테두리를 줘서
+  // "이 영역이 선택되어 아래로 확대됐다"는 느낌을 라인만으로 표현한다(텍스트/색 설명 없이).
+  // 테두리는 본인주식 색으로, 본인주식↔배우자주식이 서로 맞닿는 면(안쪽 경계)에는 넣지 않는다.
+  var MARQUEE_SIDE = '2px solid ' + MY_STOCK_COLOR;
+  var top='<div class="tier" style="height:22px;margin-bottom:0;border-radius:5px 5px 0 0;">';
+  if (reVal>0) top += '<div style="width:'+rePct.toFixed(2)+'%;background:'+RE_COLOR+'" title="부동산 '+rePct.toFixed(1)+'%"></div>';
+  if (myTotal>0) top += '<div style="width:'+myPct.toFixed(2)+'%;background:'+MY_STOCK_COLOR+';box-sizing:border-box;border-top:'+MARQUEE_SIDE+';border-bottom:'+MARQUEE_SIDE+';border-left:'+MARQUEE_SIDE+'" title="본인주식 '+myPct.toFixed(1)+'%"></div>';
+  if (spTotal>0) top += '<div style="width:'+spPct.toFixed(2)+'%;background:'+SP_STOCK_COLOR+';box-sizing:border-box;border-top:'+MARQUEE_SIDE+';border-bottom:'+MARQUEE_SIDE+';border-right:'+MARQUEE_SIDE+'" title="배우자주식 '+spPct.toFixed(1)+'%"></div>';
+  top += '</div>';
+
+  if (stockTotal<=0){
+    // 주식 데이터가 전혀 없으면 확대할 대상이 없으므로 1단계 막대만 보여준다.
+    return topLegend + top;
+  }
+
+  // 1단계의 주식 부분(rePct%~100%)이 확대되어 2단계 막대(0%~100%) 전체가 됐다는 것을
+  // 회색 사다리꼴로 이어준다. 부동산이 없으면 자연스럽게 직사각형이 되어 왜곡되지 않는다.
+  var connector = '<svg viewBox="0 0 100 14" preserveAspectRatio="none" width="100%" height="14" style="display:block;">' +
+    '<polygon points="'+rePct.toFixed(2)+',0 100,0 100,14 0,14" fill="var(--line-soft)"/>' +
+    '</svg>';
+
+  // 2단계 막대는 순수하게 섹터 구성만 보여주면 되므로 별도 테두리는 넣지 않는다.
+  var bottom='<div class="tier" style="height:22px;margin-bottom:10px;border-radius:0 0 5px 5px;">';
+  // 본인/배우자 영역이 구분되도록, 각 그룹의 바깥쪽 가장자리에만 좌우 테두리를 둬서
+  // 그룹 전체를 자기 색 테두리로 감싼 것처럼 보이게 한다(안쪽 세그먼트 사이에는 넣지 않음).
+  var myKeys = SECTOR_KEYS.filter(function(k){ return num(myStock[k])>0; });
+  myKeys.forEach(function(k, idx){
+    var v=num(myStock[k]);
+    var pct=v/stockTotal*100;
+    var ownPct = myTotal>0 ? (v/myTotal*100).toFixed(1) : '0';
+    var sides = 'border-top:2px solid '+MY_STOCK_COLOR+';border-bottom:2px solid '+MY_STOCK_COLOR+';';
+    if (idx===0) sides += 'border-left:2px solid '+MY_STOCK_COLOR+';';
+    if (idx===myKeys.length-1) sides += 'border-right:2px solid '+MY_STOCK_COLOR+';';
+    bottom += '<div style="width:'+pct.toFixed(2)+'%;background:'+MY_COLORS[k]+';box-sizing:border-box;'+sides+'" title="본인 '+SECTOR_LABELS[k]+' — 본인 주식 중 '+ownPct+'%"></div>';
+  });
+  var spKeys = SECTOR_KEYS.filter(function(k){ return num(spStock[k])>0; });
+  spKeys.forEach(function(k, idx){
+    var v=num(spStock[k]);
+    var pct=v/stockTotal*100;
+    var ownPct = spTotal>0 ? (v/spTotal*100).toFixed(1) : '0';
+    var sides = 'border-top:2px solid '+SP_STOCK_COLOR+';border-bottom:2px solid '+SP_STOCK_COLOR+';';
+    if (idx===0) sides += 'border-left:2px solid '+SP_STOCK_COLOR+';';
+    if (idx===spKeys.length-1) sides += 'border-right:2px solid '+SP_STOCK_COLOR+';';
+    bottom += '<div style="width:'+pct.toFixed(2)+'%;background:'+SP_COLORS[k]+';box-sizing:border-box;'+sides+'" title="배우자 '+SECTOR_LABELS[k]+' — 배우자 주식 중 '+ownPct+'%"></div>';
+  });
+  bottom += '</div>';
+
+  // 범례는 본인 한 줄, 배우자 한 줄로만 — 금액이 0인 섹터도 포함해 전부 나열하고,
+  // %는 "그 사람 주식 계좌 안에서" 비중으로 표시(전체자산 대비로 하면 숫자가 너무 작아 비교하기 어려움).
+  var legend = '';
+  if (myTotal>0){
+    legend += '<div class="legend-line"><span class="d" style="background:'+MY_STOCK_COLOR+'"></span><span class="who">본인</span>';
+    SECTOR_KEYS.forEach(function(k){
+      var v=num(myStock[k]);
+      var ownPct = myTotal>0 ? v/myTotal*100 : 0;
+      legend += '<span class="sep">·</span>'+SECTOR_LABELS[k]+' '+ownPct.toFixed(1)+'%';
+    });
+    legend += '</div>';
+  }
+  if (spTotal>0){
+    legend += '<div class="legend-line"><span class="d" style="background:'+SP_STOCK_COLOR+'"></span><span class="who">배우자</span>';
+    SECTOR_KEYS.forEach(function(k){
+      var v=num(spStock[k]);
+      var ownPct = spTotal>0 ? v/spTotal*100 : 0;
+      legend += '<span class="sep">·</span>'+SECTOR_LABELS[k]+' '+ownPct.toFixed(1)+'%';
+    });
+    legend += '</div>';
+  }
+
+  return topLegend + top + connector + bottom + legend;
+}
+
+function buildRetirementSection(metrics){
+  var r = metrics.readiness;
+  var barPct = Math.min(100, Math.max(0, r.readinessPct));
+  var lc = state.settings.lifestyle || DEFAULT_SETTINGS.lifestyle;
+  var items = [
+    {label:'기본', val:num(lc.basic), color:'#CECBF6', text:'#26215C'},
+    {label:'의료', val:num(lc.medical), color:'#AFA9EC', text:'#26215C'},
+    {label:'여행', val:num(lc.travelAnnual)/12, color:'#7F77DD', text:'#EEEDFE'},
+    {label:'취미·운동', val:num(lc.golfMonthly), color:'#534AB7', text:'#EEEDFE'},
+    {label:'기타비상금', val:num(lc.etcMonthly), color:'#3C3489', text:'#EEEDFE'}
+  ];
+  var monthlyTotal = r.monthlyLifestyle || 0;
+  var bar = '<div class="tier" style="height:26px">';
+  items.forEach(function(it){
+    var pct = monthlyTotal>0 ? (it.val/monthlyTotal*100) : 0;
+    if (pct<=0) return;
+    bar += '<div style="width:'+pct.toFixed(2)+'%;background:'+it.color+';color:'+it.text+'">'+(pct>=12? it.label:'')+'</div>';
+  });
+  bar += '</div>';
+  var legend='<div class="legend-line">';
+  items.forEach(function(it,i){
+    if (i>0) legend += '<span class="sep">·</span>';
+    legend += '<span class="d" style="background:'+it.color+'"></span>'+it.label+' <b>'+formatWon(it.val)+'</b>';
+  });
+  legend += '</div>';
+
+  var html = '<section class="panel">';
+  html += '<h2>은퇴 준비도 <span class="sub">'+(state.settings.includeRealEstate?'부동산 포함':'금융자산 기준')+'</span></h2>';
+  html += '<div class="retire-top"><div><div class="retire-pct">'+r.readinessPct.toFixed(0)+'<span class="unit">%</span></div><div class="retire-sub">목표 은퇴자금 대비 현재 준비율</div></div>';
+  html += '<div style="text-align:right;"><div class="retire-sub">목표 은퇴자금 <b style="color:var(--ink)">'+formatWon(r.targetFund)+'</b></div><div class="retire-sub">현재 준비 자산 <b style="color:var(--ink)">'+formatWon(r.currentFund)+'</b></div></div></div>';
+  html += '<div class="gauge"><div class="fill" style="width:'+barPct+'%"></div></div>';
+  html += '<div class="gauge-labels"><span>0%</span><span>100%</span></div>';
+  html += '<p style="font-size:11.5px;color:var(--ink-faint);margin:10px 0 0;">계산식: (오늘 기준 월 부족분 '+formatWon(r.monthlyGap)+' × 12) → 은퇴까지 '+r.yearsToRetire+'년, 연 '+r.inflationRate.toFixed(1)+'% 물가상승 반영해 은퇴 시점 기준 연 '+formatWon(r.annualGapAtRetirement)+'로 환산 → × 은퇴기간 '+Math.max(1,num(state.settings.retireYears)||1)+'년. 은퇴 기간 중 추가 물가상승은 투자수익으로 상쇄된다고 가정한 단순화된 값입니다.</p>';
+  html += '<div class="retire-facts"><span>은퇴까지 <b>'+r.yearsToRetire+'년</b></span><span>오늘 기준 월 필요생활비 <b>'+formatWon(r.monthlyLifestyle)+'</b></span><span>연금 커버 <b>'+formatWon(Math.min(r.pension,r.monthlyLifestyle))+'</b></span><span>오늘 기준 월 부족분 <b>'+formatWon(r.monthlyGap)+'</b></span></div>';
+  html += '<div class="divider"></div>';
+  html += '<h2 style="margin-bottom:10px">은퇴 후 월 생활비 구성</h2>';
+  html += bar + legend;
+  html += '</section>';
+  return html;
+}
+
+// ---------------- render ----------------
+function render(){
+  var months = sortedMonths(state.entries);
+  var dash = document.getElementById('dashboard');
+  var banner = document.getElementById('storageBanner');
+  if (banner) banner.classList.toggle('show', !storageAvailable);
+
+  if (months.length===0){
+    dash.innerHTML =
+      '<div class="empty-state">'+
+        '<h2>아직 입력된 기록이 없어요</h2>'+
+        '<p>이번달 입력하기를 눌러 첫 달 자산 스냅샷을 남겨보세요.<br>다음달부터는 지난달 값이 자동으로 채워져서 1~2분이면 끝나요.</p>'+
+        '<button class="primary" id="emptyCta">이번달 입력하기</button>'+
+      '</div>';
+    var cta = document.getElementById('emptyCta');
+    if (cta) cta.addEventListener('click', openEntryModal);
+    return;
+  }
+
+  var metrics = computeDashboardMetrics(state.entries, state.settings);
+  var myStock = metrics.latest.myStock || emptyStock();
+  var spStock = metrics.latest.spouseStock || emptyStock();
+  var html = '';
+
+  var last6 = months.slice(-6).map(function(k){ return netWorth(state.entries[k]); });
+  html += '<div class="kpi-grid">';
+  html += '<div class="kpi-card"><div class="klabel">순자산</div><div class="kval">'+formatWon(metrics.netWorth)+'</div><div class="kspark">'+buildSparkline(last6)+'</div></div>';
+  html += '<div class="kpi-card"><div class="klabel">전월 대비</div>' + (metrics.momDelta!==null ? ('<div class="kval '+(metrics.momDelta>0?'up':(metrics.momDelta<0?'down':''))+'">'+formatDelta(metrics.momDelta)+'</div>') : '<div class="kna">이번달이 첫 기록이에요</div>') + '</div>';
+  html += '<div class="kpi-card"><div class="klabel">1년 전 대비</div>' + (metrics.yoyAvailable ? ('<div class="kval '+(metrics.yoyDelta>0?'up':(metrics.yoyDelta<0?'down':''))+'">'+formatDelta(metrics.yoyDelta)+'</div>') : '<div class="kna">12개월 데이터가 쌓이면 표시돼요</div>') + '</div>';
+  html += '<div class="kpi-card"><div class="klabel">은퇴 준비율</div><div class="kval">'+metrics.readiness.readinessPct.toFixed(0)+'%</div></div>';
+  html += '</div>';
+
+  html += '<section class="panel"><h2>자산 구성 추이 <span class="sub">부동산·본인주식·배우자주식</span></h2>';
+  if (months.length>=2){
+    var trendMonths = months.slice(-12);
+    var data = trendMonths.map(function(k){
+      var e = state.entries[k];
+      return { re:num(e.realEstate), my:stockTotal(e,'myStock'), sp:stockTotal(e,'spouseStock') };
+    });
+    html += '<div class="trend-wrap">'+buildStackedAreaSVG(trendMonths, data)+'</div>';
+  } else {
+    html += '<p style="font-size:12.5px;color:var(--ink-faint)">다음 달 기록이 쌓이면 이 자리에 추이 그래프가 나타나요.</p>';
+  }
+  html += '</section>';
+
+  html += '<section class="panel"><h2>전체 자산 한눈에</h2>';
+  html += buildIcicle(metrics.reVal, myStock, metrics.myVal, spStock, metrics.spVal);
+  html += '</section>';
+
+  html += buildRetirementSection(metrics);
+
+  dash.innerHTML = html;
+}
+
+// ---------------- entry modal ----------------
+// 월 입력값을 기준으로 폼을 다시 채운다. 그 달에 이미 저장된 값이 있으면(=수정) 그 값을 그대로,
+// 없으면(=신규) 그 달보다 "이전"인 가장 최근 달 값을 carry-forward한다. (미래 달 값을 끌어오지 않음)
+function prefillForMonth(targetKey){
+  var months = sortedMonths(state.entries);
+  var existing = state.entries[targetKey];
+  var carrySource = existing || null;
+  if (!carrySource){
+    var priorMonths = months.filter(function(m){ return m < targetKey; });
+    carrySource = priorMonths.length ? state.entries[priorMonths[priorMonths.length-1]] : null;
+  }
+  document.getElementById('fSalary').value = existing ? existing.salary : (carrySource ? carrySource.salary : '');
+  document.getElementById('fLiving').value = existing ? existing.living : (carrySource ? carrySource.living : '');
+  document.getElementById('fRealEstate').value = carrySource ? carrySource.realEstate : '';
+
+  var myS = (existing ? existing.myStock : (carrySource ? carrySource.myStock : null)) || emptyStock();
+  var spS = (existing ? existing.spouseStock : (carrySource ? carrySource.spouseStock : null)) || emptyStock();
+  SECTOR_KEYS.forEach(function(k){
+    document.getElementById('fMy'+cap(k)).value = myS[k] || '';
+    document.getElementById('fSp'+cap(k)).value = spS[k] || '';
+  });
+  updateEntryPreview();
+}
+
+function openEntryModal(){
+  var targetKey = nextMonthKey(state.entries);
+  document.getElementById('entryErr').classList.remove('show');
+  document.getElementById('fMonth').value = targetKey;
+  prefillForMonth(targetKey);
+  document.getElementById('entryModal').classList.remove('hidden');
+}
+
+function readEntryForm(){
+  var my={}, sp={};
+  SECTOR_KEYS.forEach(function(k){
+    my[k] = num(document.getElementById('fMy'+cap(k)).value);
+    sp[k] = num(document.getElementById('fSp'+cap(k)).value);
+  });
+  return {
+    month: document.getElementById('fMonth').value,
+    salary: num(document.getElementById('fSalary').value),
+    living: num(document.getElementById('fLiving').value),
+    realEstate: num(document.getElementById('fRealEstate').value),
+    myStock: my, spouseStock: sp
+  };
+}
+
+function updateEntryPreview(){
+  var data = readEntryForm();
+  var myT = SECTOR_KEYS.reduce(function(s,k){ return s+data.myStock[k]; },0);
+  var spT = SECTOR_KEYS.reduce(function(s,k){ return s+data.spouseStock[k]; },0);
+  document.getElementById('myTotalVal').textContent = formatWon(myT);
+  document.getElementById('spTotalVal').textContent = formatWon(spT);
+  document.getElementById('previewNetWorth').textContent = formatWon(myT+spT+data.realEstate);
+}
+
+function saveEntryForm(){
+  var data = readEntryForm();
+  var errEl = document.getElementById('entryErr');
+  if (!data.month || !/^\d{4}-\d{2}$/.test(data.month)){
+    errEl.textContent = '기준 연월을 선택해주세요.';
+    errEl.classList.add('show');
+    return;
+  }
+  errEl.classList.remove('show');
+  state.entries[data.month] = { salary:data.salary, living:data.living, realEstate:data.realEstate, myStock:data.myStock, spouseStock:data.spouseStock };
+  persistEntries();
+  document.getElementById('entryModal').classList.add('hidden');
+  render();
+  downloadBackupJSON(); // 저장과 동시에 자동 백업
+}
+
+// ---------------- settings modal ----------------
+function updateTravelHint(){
+  var v = num(document.getElementById('sTravel').value);
+  document.getElementById('sTravelHint').textContent = '= 월 ' + formatWon(v/12);
+}
+
+function openSettingsModal(){
+  var st = state.settings;
+  document.getElementById('sCurrentAge').value = st.currentAge;
+  document.getElementById('sRetireAge').value = st.retireAge;
+  document.getElementById('sRetireYears').value = st.retireYears;
+  document.getElementById('sPension').value = st.pensionMonthly;
+  document.getElementById('sInflation').value = (st.inflationRate !== undefined ? st.inflationRate : DEFAULT_SETTINGS.inflationRate);
+  document.getElementById('sBasic').value = st.lifestyle.basic;
+  document.getElementById('sMedical').value = st.lifestyle.medical;
+  document.getElementById('sTravel').value = st.lifestyle.travelAnnual;
+  updateTravelHint();
+  document.getElementById('sGolf').value = st.lifestyle.golfMonthly;
+  document.getElementById('sEtc').value = st.lifestyle.etcMonthly;
+  document.getElementById('sIncludeRE').checked = !!st.includeRealEstate;
+  document.getElementById('settingsModal').classList.remove('hidden');
+}
+function saveSettingsForm(){
+  state.settings = {
+    currentAge: num(document.getElementById('sCurrentAge').value),
+    retireAge: num(document.getElementById('sRetireAge').value),
+    retireYears: num(document.getElementById('sRetireYears').value) || 1,
+    pensionMonthly: num(document.getElementById('sPension').value),
+    inflationRate: num(document.getElementById('sInflation').value),
+    lifestyle: {
+      basic: num(document.getElementById('sBasic').value),
+      medical: num(document.getElementById('sMedical').value),
+      travelAnnual: num(document.getElementById('sTravel').value),
+      golfMonthly: num(document.getElementById('sGolf').value),
+      etcMonthly: num(document.getElementById('sEtc').value)
+    },
+    includeRealEstate: document.getElementById('sIncludeRE').checked
+  };
+  persistSettings();
+  document.getElementById('settingsModal').classList.add('hidden');
+  render();
+}
+
+// ---------------- backup export / import ----------------
+function downloadBackupJSON(){
+  var payloadObj = { entries: state.entries, settings: state.settings, exportedAt: new Date().toISOString() };
+  window.__testHooks = window.__testHooks || {};
+  window.__testHooks.lastBackupPayload = payloadObj;
+  try {
+    var payload = JSON.stringify(payloadObj, null, 2);
+    var blob = new Blob([payload], { type:'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    var today = new Date().toISOString().slice(0,10);
+    a.href = url; a.download = '우리집자산관리_백업_'+today+'.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  } catch (e) {
+    console.error('backup download failed', e);
+  }
+}
+
+function handleBackupFileContent(text){
+  var obj;
+  try { obj = JSON.parse(text); }
+  catch (e) { window.alert('올바른 JSON 파일이 아닙니다.'); return false; }
+
+  var v = validateBackupShape(obj);
+  if (!v.ok){ window.alert('백업 파일 형식이 올바르지 않습니다: ' + v.reason); return false; }
+
+  var months = sortedMonths(obj.entries);
+  var latest = months.length ? months[months.length-1] : '없음';
+  var msg = '이 백업 파일에는 ' + months.length + '개월치 기록이 있고, 가장 최근 달은 ' + latest + '입니다.\n현재 이 기기의 데이터를 덮어씁니다. 계속할까요?';
+  if (!window.confirm(msg)) return false;
+
+  state.entries = obj.entries;
+  state.settings = mergeSettings(obj.settings);
+  persistEntries(); persistSettings();
+  render();
+  window.alert('백업을 불러왔습니다.');
+  return true;
+}
+
+// ---------------- excel export ----------------
+function exportExcel(){
+  var months = sortedMonths(state.entries);
+  if (months.length===0){ window.alert('저장된 데이터가 없습니다.'); return; }
+  if (typeof XLSX === 'undefined'){ window.alert('엑셀 내보내기 기능을 불러오지 못했어요. 인터넷 연결을 확인해주세요.'); return; }
+
+  var rows = months.map(function(k){
+    var e = state.entries[k];
+    var myT = stockTotal(e,'myStock'), spT = stockTotal(e,'spouseStock');
+    var row = { '월':k, '월급':e.salary, '생활비':e.living, '저축여력': num(e.salary)-num(e.living), '부동산':e.realEstate };
+    SECTOR_KEYS.forEach(function(sk){ row['본인_'+SECTOR_LABELS[sk]] = (e.myStock&&e.myStock[sk])||0; });
+    row['본인_주식합계'] = myT;
+    SECTOR_KEYS.forEach(function(sk){ row['배우자_'+SECTOR_LABELS[sk]] = (e.spouseStock&&e.spouseStock[sk])||0; });
+    row['배우자_주식합계'] = spT;
+    row['순자산'] = netWorth(e);
+    return row;
+  });
+
+  var wb = XLSX.utils.book_new();
+  var ws = XLSX.utils.json_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb, ws, '월별기록');
+
+  var st = state.settings;
+  var settingsRows = [
+    {항목:'현재 나이', 값:st.currentAge}, {항목:'은퇴 예정 나이', 값:st.retireAge},
+    {항목:'은퇴 후 예상 기간(년)', 값:st.retireYears}, {항목:'연금 월수령 예상액', 값:st.pensionMonthly}, {항목:'예상 인플레이션율(연,%)', 값:st.inflationRate},
+    {항목:'기본생활비(월)', 값:st.lifestyle.basic}, {항목:'의료비(월)', 값:st.lifestyle.medical},
+    {항목:'해외여행(연간)', 값:st.lifestyle.travelAnnual}, {항목:'취미·운동(월)', 값:st.lifestyle.golfMonthly},
+    {항목:'기타·비상금(월)', 값:st.lifestyle.etcMonthly}, {항목:'부동산 포함 여부', 값: st.includeRealEstate?'Y':'N'}
+  ];
+  var ws2 = XLSX.utils.json_to_sheet(settingsRows);
+  XLSX.utils.book_append_sheet(wb, ws2, '은퇴설정');
+
+  var today = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, '우리집자산관리_'+today+'.xlsx');
+}
+
+// ---------------- events ----------------
+function bindEvents(){
+  document.getElementById('btnEntry').addEventListener('click', openEntryModal);
+  document.getElementById('btnEntryCancel').addEventListener('click', function(){ document.getElementById('entryModal').classList.add('hidden'); });
+  document.getElementById('btnEntrySave').addEventListener('click', saveEntryForm);
+  document.getElementById('entryModal').addEventListener('input', updateEntryPreview);
+  document.getElementById('fMonth').addEventListener('change', function(){
+    if (/^\d{4}-\d{2}$/.test(this.value)) prefillForMonth(this.value);
+  });
+
+  document.getElementById('btnSettings').addEventListener('click', openSettingsModal);
+  document.getElementById('btnSettingsCancel').addEventListener('click', function(){ document.getElementById('settingsModal').classList.add('hidden'); });
+  document.getElementById('btnSettingsSave').addEventListener('click', saveSettingsForm);
+  document.getElementById('sTravel').addEventListener('input', updateTravelHint);
+
+  document.getElementById('btnExport').addEventListener('click', exportExcel);
+  document.getElementById('btnBackupSave').addEventListener('click', downloadBackupJSON);
+  document.getElementById('btnBackupLoad').addEventListener('click', function(){ document.getElementById('backupFileInput').click(); });
+  document.getElementById('backupFileInput').addEventListener('change', function(e){
+    var file = e.target.files && e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(evt){ handleBackupFileContent(evt.target.result); e.target.value=''; };
+    reader.onerror = function(){ window.alert('파일을 읽는 중 오류가 발생했습니다.'); };
+    reader.readAsText(file);
+  });
+
+  [document.getElementById('entryModal'), document.getElementById('settingsModal')].forEach(function(ov){
+    ov.addEventListener('click', function(e){ if (e.target===ov) ov.classList.add('hidden'); });
+  });
+}
+
+function init(){
+  loadState();
+  bindEvents();
+  render();
+  window.__testHooks.ready = true; // init 완전히 끝난 시점의 신호 (테스트 전용, 동작에 영향 없음)
+}
+
+// 테스트에서 직접 접근할 수 있도록 노출 (프로덕션 동작에는 영향 없음)
+window.__testHooks = window.__testHooks || {};
+window.__testHooks.ready = false;
+window.__testHooks.state = state;
+window.__testHooks.render = render;
+window.__testHooks.openEntryModal = openEntryModal;
+window.__testHooks.prefillForMonth = prefillForMonth;
+window.__testHooks.saveEntryForm = saveEntryForm;
+window.__testHooks.openSettingsModal = openSettingsModal;
+window.__testHooks.saveSettingsForm = saveSettingsForm;
+window.__testHooks.exportExcel = exportExcel;
+window.__testHooks.downloadBackupJSON = downloadBackupJSON;
+window.__testHooks.handleBackupFileContent = handleBackupFileContent;
+window.__testHooks.storageAvailable = function(){ return storageAvailable; };
+
+var _initialized = false;
+function safeInit(){ if (_initialized) return; _initialized = true; init(); }
+document.addEventListener('DOMContentLoaded', safeInit);
+if (document.readyState !== 'loading') { safeInit(); }
+})();
+
+</script>
+
+</body>
+</html>
