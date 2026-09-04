@@ -519,9 +519,9 @@ function buildSparkline(values){
 }
 
 function buildStackedAreaSVG(months, data){
-  var w = Math.max(360, months.length*70), h=220, pad={l:56,r:20,t:20,b:30};
+  var w = Math.max(360, months.length*70), h=110, pad={l:56,r:20,t:12,b:18};
   var totals = data.map(function(d){ return d.re+d.my+d.sp; });
-  var maxV = Math.max.apply(null, totals.concat([1]));
+  var maxV = Math.max.apply(null, totals.concat([1])) * 1.18; // 최상단 값 라벨이 잘리지 않도록 여유를 둠
   var innerW=w-pad.l-pad.r, innerH=h-pad.t-pad.b;
   var stepX = months.length>1 ? innerW/(months.length-1) : 0;
   function yFor(v){ return pad.t + (1-(v/maxV))*innerH; }
@@ -594,28 +594,20 @@ function buildIcicle(reVal, myStock, myTotal, spStock, spTotal){
     '<polygon points="'+rePct.toFixed(2)+',0 100,0 100,14 '+TIER2_LEFT+',14" fill="var(--line-soft)"/>' +
     '</svg>';
 
-  // 본인/배우자 영역이 구분되도록, 각 그룹의 바깥쪽 가장자리에만 좌우 테두리를 둬서
-  // 그룹 전체를 자기 색 테두리로 감싼 것처럼 보이게 한다(안쪽 세그먼트 사이에는 넣지 않음).
   var bottomBar = '<div class="tier" style="height:22px;border-radius:0 0 5px 5px;">';
   var myKeys = MY_SECTOR_KEYS.filter(function(k){ return num(myStock[k])>0; });
-  myKeys.forEach(function(k, idx){
+  myKeys.forEach(function(k){
     var v=num(myStock[k]);
     var pct=v/stockTotal*100;
     var ownPct = myTotal>0 ? (v/myTotal*100).toFixed(1) : '0';
-    var sides = 'border-top:2px solid '+MY_STOCK_COLOR+';border-bottom:2px solid '+MY_STOCK_COLOR+';';
-    if (idx===0) sides += 'border-left:2px solid '+MY_STOCK_COLOR+';';
-    if (idx===myKeys.length-1) sides += 'border-right:2px solid '+MY_STOCK_COLOR+';';
-    bottomBar += '<div style="width:'+pct.toFixed(2)+'%;background:'+MY_COLORS[k]+';box-sizing:border-box;'+sides+'" title="본인 '+MY_SECTOR_LABELS[k]+' — 본인 주식 중 '+ownPct+'%"></div>';
+    bottomBar += '<div style="width:'+pct.toFixed(2)+'%;background:'+MY_COLORS[k]+'" title="본인 '+MY_SECTOR_LABELS[k]+' — 본인 주식 중 '+ownPct+'%"></div>';
   });
   var spKeys = SP_SECTOR_KEYS.filter(function(k){ return num(spStock[k])>0; });
-  spKeys.forEach(function(k, idx){
+  spKeys.forEach(function(k){
     var v=num(spStock[k]);
     var pct=v/stockTotal*100;
     var ownPct = spTotal>0 ? (v/spTotal*100).toFixed(1) : '0';
-    var sides = 'border-top:2px solid '+SP_STOCK_COLOR+';border-bottom:2px solid '+SP_STOCK_COLOR+';';
-    if (idx===0) sides += 'border-left:2px solid '+SP_STOCK_COLOR+';';
-    if (idx===spKeys.length-1) sides += 'border-right:2px solid '+SP_STOCK_COLOR+';';
-    bottomBar += '<div style="width:'+pct.toFixed(2)+'%;background:'+SP_COLORS[k]+';box-sizing:border-box;'+sides+'" title="배우자 '+SP_SECTOR_LABELS[k]+' — 배우자 주식 중 '+ownPct+'%"></div>';
+    bottomBar += '<div style="width:'+pct.toFixed(2)+'%;background:'+SP_COLORS[k]+'" title="배우자 '+SP_SECTOR_LABELS[k]+' — 배우자 주식 중 '+ownPct+'%"></div>';
   });
   bottomBar += '</div>';
   // 2단계 막대는 1단계 가로폭의 80% 크기로, 오른쪽 정렬.
@@ -655,7 +647,7 @@ function buildRetirementSection(metrics){
     {label:'의료', val:num(lc.medical), color:'#AFA9EC', text:'#26215C'},
     {label:'여행', val:num(lc.travelAnnual)/12, color:'#7F77DD', text:'#EEEDFE'},
     {label:'취미·운동', val:num(lc.golfMonthly), color:'#534AB7', text:'#EEEDFE'},
-    {label:'기타비상금', val:num(lc.etcMonthly), color:'#3C3489', text:'#EEEDFE'}
+    {label:'기타비상금세금', val:num(lc.etcMonthly), color:'#3C3489', text:'#EEEDFE'}
   ];
   var monthlyTotal = r.monthlyLifestyle || 0;
   var bar = '<div class="tier" style="height:26px">';
@@ -719,6 +711,10 @@ function render(){
   html += '<div class="kpi-card"><div class="klabel">은퇴 준비율</div><div class="kval">'+metrics.readiness.readinessPct.toFixed(0)+'%</div></div>';
   html += '</div>';
 
+  html += '<section class="panel"><h2>전체자산</h2>';
+  html += buildIcicle(metrics.reVal, myStock, metrics.myVal, spStock, metrics.spVal);
+  html += '</section>';
+
   html += '<section class="panel"><h2>자산 구성 추이 <span class="sub">부동산·본인주식·배우자주식</span></h2>';
   if (months.length>=2){
     var trendMonths = months.slice(-12);
@@ -730,10 +726,6 @@ function render(){
   } else {
     html += '<p style="font-size:12.5px;color:var(--ink-faint)">다음 달 기록이 쌓이면 이 자리에 추이 그래프가 나타나요.</p>';
   }
-  html += '</section>';
-
-  html += '<section class="panel"><h2>전체 자산 한눈에</h2>';
-  html += buildIcicle(metrics.reVal, myStock, metrics.myVal, spStock, metrics.spVal);
   html += '</section>';
 
   html += buildRetirementSection(metrics);
