@@ -162,24 +162,21 @@
       <div class="field-grid"><div class="field"><label>부동산 시가 합계</label><input type="number" id="fRealEstate" placeholder="0"></div></div>
     </div>
     <div class="field-group">
-      <div class="fg-title">본인 주식계좌 — 섹터별 평가액</div>
+      <div class="fg-title">본인 주식계좌 — 항목별 평가액</div>
       <div class="field-grid">
-        <div class="field"><label>현금/채권</label><input type="number" id="fMyCashBond" placeholder="0"></div>
-        <div class="field"><label>배당ETF</label><input type="number" id="fMyDividendEtf" placeholder="0"></div>
-        <div class="field"><label>대형주</label><input type="number" id="fMyLargeCap" placeholder="0"></div>
-        <div class="field"><label>성장주</label><input type="number" id="fMyGrowth" placeholder="0"></div>
-        <div class="field"><label>기타</label><input type="number" id="fMyOther" placeholder="0"></div>
+        <div class="field"><label>국내주식</label><input type="number" id="fMyDomesticStock" placeholder="0"></div>
+        <div class="field"><label>국내예수금</label><input type="number" id="fMyDomesticCash" placeholder="0"></div>
+        <div class="field"><label>해외주식</label><input type="number" id="fMyForeignStock" placeholder="0"></div>
+        <div class="field"><label>해외예수금</label><input type="number" id="fMyForeignCash" placeholder="0"></div>
         <div class="subtotal">본인 주식 합계: <b id="myTotalVal">0원</b></div>
       </div>
     </div>
     <div class="field-group">
-      <div class="fg-title">배우자 주식계좌 — 섹터별 평가액</div>
+      <div class="fg-title">배우자 주식계좌 — 항목별 평가액</div>
       <div class="field-grid">
-        <div class="field"><label>현금/채권</label><input type="number" id="fSpCashBond" placeholder="0"></div>
-        <div class="field"><label>배당ETF</label><input type="number" id="fSpDividendEtf" placeholder="0"></div>
-        <div class="field"><label>대형주</label><input type="number" id="fSpLargeCap" placeholder="0"></div>
-        <div class="field"><label>성장주</label><input type="number" id="fSpGrowth" placeholder="0"></div>
-        <div class="field"><label>기타</label><input type="number" id="fSpOther" placeholder="0"></div>
+        <div class="field"><label>퇴직연금계좌</label><input type="number" id="fSpRetirement" placeholder="0"></div>
+        <div class="field"><label>CMA</label><input type="number" id="fSpCma" placeholder="0"></div>
+        <div class="field"><label>연금계좌</label><input type="number" id="fSpPension" placeholder="0"></div>
         <div class="subtotal">배우자 주식 합계: <b id="spTotalVal">0원</b></div>
       </div>
     </div>
@@ -235,9 +232,12 @@
 // core.js — 순수 계산/포맷 로직 (DOM 의존 없음, node로 단위테스트 가능)
 "use strict";
 
-const SECTOR_KEYS = ['cashBond', 'dividendEtf', 'largeCap', 'growth', 'other'];
-const SECTOR_LABELS = { cashBond: '현금/채권', dividendEtf: '배당ETF', largeCap: '대형주', growth: '성장주', other: '기타' };
-const SECTOR_COLORS = { cashBond: '#A9A08C', dividendEtf: '#1F4B43', largeCap: '#4C7A93', growth: '#7C9E80', other: '#9D93B8' };
+// 본인주식과 배우자주식은 이제 서로 다른 항목 체계를 쓴다.
+const MY_SECTOR_KEYS = ['domesticStock', 'domesticCash', 'foreignStock', 'foreignCash'];
+const MY_SECTOR_LABELS = { domesticStock: '국내주식', domesticCash: '국내예수금', foreignStock: '해외주식', foreignCash: '해외예수금' };
+
+const SP_SECTOR_KEYS = ['retirement', 'cma', 'pension'];
+const SP_SECTOR_LABELS = { retirement: '퇴직연금계좌', cma: 'CMA', pension: '연금계좌' };
 
 const DEFAULT_SETTINGS = Object.freeze({
   currentAge: 52, retireAge: 60, retireYears: 30, pensionMonthly: 2000000,
@@ -246,9 +246,18 @@ const DEFAULT_SETTINGS = Object.freeze({
   includeRealEstate: false
 });
 
-function emptyStock() {
+function sectorKeysFor(who) {
+  return who === 'myStock' ? MY_SECTOR_KEYS : SP_SECTOR_KEYS;
+}
+
+function emptyMyStock() {
   const o = {};
-  SECTOR_KEYS.forEach(k => { o[k] = 0; });
+  MY_SECTOR_KEYS.forEach(k => { o[k] = 0; });
+  return o;
+}
+function emptySpStock() {
+  const o = {};
+  SP_SECTOR_KEYS.forEach(k => { o[k] = 0; });
   return o;
 }
 
@@ -286,8 +295,9 @@ function formatDelta(n) {
 
 function stockTotal(entry, who) {
   if (!entry || !entry[who]) return 0;
+  const keys = sectorKeysFor(who);
   let s = 0;
-  SECTOR_KEYS.forEach(k => { s += num(entry[who][k]); });
+  keys.forEach(k => { s += num(entry[who][k]); });
   return s;
 }
 
@@ -413,8 +423,8 @@ function validateBackupShape(obj) {
 
 if (typeof module !== 'undefined') {
   module.exports = {
-    SECTOR_KEYS, SECTOR_LABELS, SECTOR_COLORS, DEFAULT_SETTINGS,
-    emptyStock, num, formatWon, formatDelta, stockTotal, netWorth,
+    MY_SECTOR_KEYS, MY_SECTOR_LABELS, SP_SECTOR_KEYS, SP_SECTOR_LABELS, DEFAULT_SETTINGS,
+    emptyMyStock, emptySpStock, num, formatWon, formatDelta, stockTotal, netWorth,
     sortedMonths, monthLabel, addMonths, nextMonthKey,
     computeDashboardMetrics, computeRetirementReadiness, validateBackupShape
   };
@@ -491,8 +501,9 @@ var RE_COLOR = '#F991CC';
 var MY_STOCK_COLOR = '#F78154';
 var SP_STOCK_COLOR = '#FFD23F';
 // 2단계(섹터) 색상 — 각 부모색 그 자체를 시작점으로 두고 흰색을 섞어가며 점점 옅어지도록 계단식으로 배열
-var MY_COLORS = { cashBond:'#F78154', dividendEtf:'#F9A17F', largeCap:'#FBC0AA', growth:'#FDD9CC', other:'#FEECE5' };
-var SP_COLORS = { cashBond:'#FFD23F', dividendEtf:'#FFDD6F', largeCap:'#FFE99F', growth:'#FFF2C5', other:'#FFF8E2' };
+// 본인주식: 국내주식/국내예수금/해외주식/해외예수금 (4단계), 배우자주식: 퇴직연금계좌/CMA/연금계좌 (3단계)
+var MY_COLORS = { domesticStock:'#F78154', domesticCash:'#F9A787', foreignStock:'#FCCDBB', foreignCash:'#FEECE5' };
+var SP_COLORS = { retirement:'#FFD23F', cma:'#FFE48C', pension:'#FFF6D9' };
 
 function buildSparkline(values){
   if (!values || values.length < 2) return '';
@@ -576,17 +587,17 @@ function buildIcicle(reVal, myStock, myTotal, spStock, spTotal){
     return topLegend + top;
   }
 
-  // 1단계의 주식 부분(rePct%~100%)이 확대되어 2단계 막대(0%~100%) 전체가 됐다는 것을
-  // 회색 사다리꼴로 이어준다. 부동산이 없으면 자연스럽게 직사각형이 되어 왜곡되지 않는다.
+  // 1단계의 주식 부분(rePct%~100%)이 확대되어 2단계 막대가 됐다는 것을 회색 사다리꼴로 이어준다.
+  // 2단계 막대는 1단계 폭의 80%로 줄이고 오른쪽 정렬하므로, 커넥터 하단도 20%~100% 구간으로 맞춘다.
+  var TIER2_LEFT = 20; // 0~100 좌표계 기준, 80% 폭 오른쪽 정렬의 왼쪽 시작점
   var connector = '<svg viewBox="0 0 100 14" preserveAspectRatio="none" width="100%" height="14" style="display:block;">' +
-    '<polygon points="'+rePct.toFixed(2)+',0 100,0 100,14 0,14" fill="var(--line-soft)"/>' +
+    '<polygon points="'+rePct.toFixed(2)+',0 100,0 100,14 '+TIER2_LEFT+',14" fill="var(--line-soft)"/>' +
     '</svg>';
 
-  // 2단계 막대는 순수하게 섹터 구성만 보여주면 되므로 별도 테두리는 넣지 않는다.
-  var bottom='<div class="tier" style="height:22px;margin-bottom:10px;border-radius:0 0 5px 5px;">';
   // 본인/배우자 영역이 구분되도록, 각 그룹의 바깥쪽 가장자리에만 좌우 테두리를 둬서
   // 그룹 전체를 자기 색 테두리로 감싼 것처럼 보이게 한다(안쪽 세그먼트 사이에는 넣지 않음).
-  var myKeys = SECTOR_KEYS.filter(function(k){ return num(myStock[k])>0; });
+  var bottomBar = '<div class="tier" style="height:22px;border-radius:0 0 5px 5px;">';
+  var myKeys = MY_SECTOR_KEYS.filter(function(k){ return num(myStock[k])>0; });
   myKeys.forEach(function(k, idx){
     var v=num(myStock[k]);
     var pct=v/stockTotal*100;
@@ -594,9 +605,9 @@ function buildIcicle(reVal, myStock, myTotal, spStock, spTotal){
     var sides = 'border-top:2px solid '+MY_STOCK_COLOR+';border-bottom:2px solid '+MY_STOCK_COLOR+';';
     if (idx===0) sides += 'border-left:2px solid '+MY_STOCK_COLOR+';';
     if (idx===myKeys.length-1) sides += 'border-right:2px solid '+MY_STOCK_COLOR+';';
-    bottom += '<div style="width:'+pct.toFixed(2)+'%;background:'+MY_COLORS[k]+';box-sizing:border-box;'+sides+'" title="본인 '+SECTOR_LABELS[k]+' — 본인 주식 중 '+ownPct+'%"></div>';
+    bottomBar += '<div style="width:'+pct.toFixed(2)+'%;background:'+MY_COLORS[k]+';box-sizing:border-box;'+sides+'" title="본인 '+MY_SECTOR_LABELS[k]+' — 본인 주식 중 '+ownPct+'%"></div>';
   });
-  var spKeys = SECTOR_KEYS.filter(function(k){ return num(spStock[k])>0; });
+  var spKeys = SP_SECTOR_KEYS.filter(function(k){ return num(spStock[k])>0; });
   spKeys.forEach(function(k, idx){
     var v=num(spStock[k]);
     var pct=v/stockTotal*100;
@@ -604,28 +615,30 @@ function buildIcicle(reVal, myStock, myTotal, spStock, spTotal){
     var sides = 'border-top:2px solid '+SP_STOCK_COLOR+';border-bottom:2px solid '+SP_STOCK_COLOR+';';
     if (idx===0) sides += 'border-left:2px solid '+SP_STOCK_COLOR+';';
     if (idx===spKeys.length-1) sides += 'border-right:2px solid '+SP_STOCK_COLOR+';';
-    bottom += '<div style="width:'+pct.toFixed(2)+'%;background:'+SP_COLORS[k]+';box-sizing:border-box;'+sides+'" title="배우자 '+SECTOR_LABELS[k]+' — 배우자 주식 중 '+ownPct+'%"></div>';
+    bottomBar += '<div style="width:'+pct.toFixed(2)+'%;background:'+SP_COLORS[k]+';box-sizing:border-box;'+sides+'" title="배우자 '+SP_SECTOR_LABELS[k]+' — 배우자 주식 중 '+ownPct+'%"></div>';
   });
-  bottom += '</div>';
+  bottomBar += '</div>';
+  // 2단계 막대는 1단계 가로폭의 80% 크기로, 오른쪽 정렬.
+  var bottom = '<div style="width:80%;margin-left:auto;margin-bottom:10px;">'+bottomBar+'</div>';
 
   // 범례는 본인 한 줄, 배우자 한 줄로만 — 금액이 0인 섹터도 포함해 전부 나열하고,
   // %는 "그 사람 주식 계좌 안에서" 비중으로 표시(전체자산 대비로 하면 숫자가 너무 작아 비교하기 어려움).
   var legend = '';
   if (myTotal>0){
     legend += '<div class="legend-line"><span class="d" style="background:'+MY_STOCK_COLOR+'"></span><span class="who">본인</span>';
-    SECTOR_KEYS.forEach(function(k){
+    MY_SECTOR_KEYS.forEach(function(k){
       var v=num(myStock[k]);
       var ownPct = myTotal>0 ? v/myTotal*100 : 0;
-      legend += '<span class="sep">·</span>'+SECTOR_LABELS[k]+' '+ownPct.toFixed(1)+'%';
+      legend += '<span class="sep">·</span>'+MY_SECTOR_LABELS[k]+' '+ownPct.toFixed(1)+'%';
     });
     legend += '</div>';
   }
   if (spTotal>0){
     legend += '<div class="legend-line"><span class="d" style="background:'+SP_STOCK_COLOR+'"></span><span class="who">배우자</span>';
-    SECTOR_KEYS.forEach(function(k){
+    SP_SECTOR_KEYS.forEach(function(k){
       var v=num(spStock[k]);
       var ownPct = spTotal>0 ? v/spTotal*100 : 0;
-      legend += '<span class="sep">·</span>'+SECTOR_LABELS[k]+' '+ownPct.toFixed(1)+'%';
+      legend += '<span class="sep">·</span>'+SP_SECTOR_LABELS[k]+' '+ownPct.toFixed(1)+'%';
     });
     legend += '</div>';
   }
@@ -694,8 +707,8 @@ function render(){
   }
 
   var metrics = computeDashboardMetrics(state.entries, state.settings);
-  var myStock = metrics.latest.myStock || emptyStock();
-  var spStock = metrics.latest.spouseStock || emptyStock();
+  var myStock = metrics.latest.myStock || emptyMyStock();
+  var spStock = metrics.latest.spouseStock || emptySpStock();
   var html = '';
 
   var last6 = months.slice(-6).map(function(k){ return netWorth(state.entries[k]); });
@@ -743,10 +756,12 @@ function prefillForMonth(targetKey){
   document.getElementById('fLiving').value = existing ? existing.living : (carrySource ? carrySource.living : '');
   document.getElementById('fRealEstate').value = carrySource ? carrySource.realEstate : '';
 
-  var myS = (existing ? existing.myStock : (carrySource ? carrySource.myStock : null)) || emptyStock();
-  var spS = (existing ? existing.spouseStock : (carrySource ? carrySource.spouseStock : null)) || emptyStock();
-  SECTOR_KEYS.forEach(function(k){
+  var myS = (existing ? existing.myStock : (carrySource ? carrySource.myStock : null)) || emptyMyStock();
+  var spS = (existing ? existing.spouseStock : (carrySource ? carrySource.spouseStock : null)) || emptySpStock();
+  MY_SECTOR_KEYS.forEach(function(k){
     document.getElementById('fMy'+cap(k)).value = myS[k] || '';
+  });
+  SP_SECTOR_KEYS.forEach(function(k){
     document.getElementById('fSp'+cap(k)).value = spS[k] || '';
   });
   updateEntryPreview();
@@ -762,10 +777,8 @@ function openEntryModal(){
 
 function readEntryForm(){
   var my={}, sp={};
-  SECTOR_KEYS.forEach(function(k){
-    my[k] = num(document.getElementById('fMy'+cap(k)).value);
-    sp[k] = num(document.getElementById('fSp'+cap(k)).value);
-  });
+  MY_SECTOR_KEYS.forEach(function(k){ my[k] = num(document.getElementById('fMy'+cap(k)).value); });
+  SP_SECTOR_KEYS.forEach(function(k){ sp[k] = num(document.getElementById('fSp'+cap(k)).value); });
   return {
     month: document.getElementById('fMonth').value,
     salary: num(document.getElementById('fSalary').value),
@@ -777,8 +790,8 @@ function readEntryForm(){
 
 function updateEntryPreview(){
   var data = readEntryForm();
-  var myT = SECTOR_KEYS.reduce(function(s,k){ return s+data.myStock[k]; },0);
-  var spT = SECTOR_KEYS.reduce(function(s,k){ return s+data.spouseStock[k]; },0);
+  var myT = MY_SECTOR_KEYS.reduce(function(s,k){ return s+data.myStock[k]; },0);
+  var spT = SP_SECTOR_KEYS.reduce(function(s,k){ return s+data.spouseStock[k]; },0);
   document.getElementById('myTotalVal').textContent = formatWon(myT);
   document.getElementById('spTotalVal').textContent = formatWon(spT);
   document.getElementById('previewNetWorth').textContent = formatWon(myT+spT+data.realEstate);
@@ -893,9 +906,9 @@ function exportExcel(){
     var e = state.entries[k];
     var myT = stockTotal(e,'myStock'), spT = stockTotal(e,'spouseStock');
     var row = { '월':k, '월급':e.salary, '생활비':e.living, '저축여력': num(e.salary)-num(e.living), '부동산':e.realEstate };
-    SECTOR_KEYS.forEach(function(sk){ row['본인_'+SECTOR_LABELS[sk]] = (e.myStock&&e.myStock[sk])||0; });
+    MY_SECTOR_KEYS.forEach(function(sk){ row['본인_'+MY_SECTOR_LABELS[sk]] = (e.myStock&&e.myStock[sk])||0; });
     row['본인_주식합계'] = myT;
-    SECTOR_KEYS.forEach(function(sk){ row['배우자_'+SECTOR_LABELS[sk]] = (e.spouseStock&&e.spouseStock[sk])||0; });
+    SP_SECTOR_KEYS.forEach(function(sk){ row['배우자_'+SP_SECTOR_LABELS[sk]] = (e.spouseStock&&e.spouseStock[sk])||0; });
     row['배우자_주식합계'] = spT;
     row['순자산'] = netWorth(e);
     return row;
