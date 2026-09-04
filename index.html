@@ -214,7 +214,7 @@
         <div class="field"><label>의료비 (월)</label><input type="number" id="sMedical"></div>
         <div class="field"><label>해외여행 (연간 총액)</label><input type="number" id="sTravel"><span class="field-hint" id="sTravelHint">= 월 0원</span></div>
         <div class="field"><label>취미·운동 (월)</label><input type="number" id="sGolf"></div>
-        <div class="field"><label>경조사·기타·비상금 (월)</label><input type="number" id="sEtc"></div>
+        <div class="field"><label>기타비상금세금 (월)</label><input type="number" id="sEtc"></div>
       </div>
     </div>
     <div class="field-group">
@@ -705,9 +705,9 @@ function render(){
 
   var last6 = months.slice(-6).map(function(k){ return netWorth(state.entries[k]); });
   html += '<div class="kpi-grid">';
-  html += '<div class="kpi-card"><div class="klabel">순자산</div><div class="kval">'+formatWon(metrics.netWorth)+'</div><div class="kspark">'+buildSparkline(last6)+'</div></div>';
+  html += '<div class="kpi-card"><div class="klabel">자산</div><div class="kval">'+formatWon(metrics.netWorth)+'</div><div class="kspark">'+buildSparkline(last6)+'</div></div>';
+  html += '<div class="kpi-card"><div class="klabel">총현금</div><div class="kval">'+formatWon(metrics.myVal+metrics.spVal)+'</div></div>';
   html += '<div class="kpi-card"><div class="klabel">전월 대비</div>' + (metrics.momDelta!==null ? ('<div class="kval '+(metrics.momDelta>0?'up':(metrics.momDelta<0?'down':''))+'">'+formatDelta(metrics.momDelta)+'</div>') : '<div class="kna">이번달이 첫 기록이에요</div>') + '</div>';
-  html += '<div class="kpi-card"><div class="klabel">1년 전 대비</div>' + (metrics.yoyAvailable ? ('<div class="kval '+(metrics.yoyDelta>0?'up':(metrics.yoyDelta<0?'down':''))+'">'+formatDelta(metrics.yoyDelta)+'</div>') : '<div class="kna">12개월 데이터가 쌓이면 표시돼요</div>') + '</div>';
   html += '<div class="kpi-card"><div class="klabel">은퇴 준비율</div><div class="kval">'+metrics.readiness.readinessPct.toFixed(0)+'%</div></div>';
   html += '</div>';
 
