@@ -112,6 +112,16 @@
   .err-banner{ background:#F7E3DE; color:#7A2E1E; border-radius:8px; padding:10px 12px; font-size:12.5px; margin-bottom:14px; display:none; }
   .err-banner.show{ display:block; }
 
+  .memo-box{
+    width:100%; min-height:96px; resize:vertical; box-sizing:border-box;
+    font-family:inherit; font-size:13.5px; line-height:1.6; color:var(--ink);
+    padding:12px 14px; border:1px solid var(--line); border-radius:8px; background:#FBFAF6;
+  }
+  .memo-box:focus{ outline:none; border-color:var(--teal); background:#fff; }
+
+  .insight-row{ display:flex; gap:9px; align-items:flex-start; margin-bottom:11px; font-size:13.5px; line-height:1.55; color:var(--ink); }
+  .insight-row:last-child{ margin-bottom:0; }
+
   @media (max-width:720px){
     .kpi-grid{ grid-template-columns:repeat(2,1fr); }
     .field-grid{ grid-template-columns:1fr; }
@@ -437,6 +447,7 @@ if (typeof module !== 'undefined') {
 
 var LS_ENTRIES_KEY = 'assetDash_entries_v2';
 var LS_SETTINGS_KEY = 'assetDash_settings_v2';
+var LS_MEMO_KEY = 'assetDash_memo_v2';
 
 var memoryStore = {};
 var storageAvailable = (function(){
@@ -461,7 +472,7 @@ function storageSet(key, val){
   } catch (e) { memoryStore[key] = val; return false; }
 }
 
-var state = { entries: {}, settings: JSON.parse(JSON.stringify(DEFAULT_SETTINGS)) };
+var state = { entries: {}, settings: JSON.parse(JSON.stringify(DEFAULT_SETTINGS)), memo: '' };
 
 function mergeSettings(saved){
   // 예전 버전에서 저장된 settings에는 나중에 추가된 필드(inflationRate 등)가
@@ -489,9 +500,18 @@ function loadState(){
     var s = storageGet(LS_SETTINGS_KEY);
     state.settings = mergeSettings(s ? JSON.parse(s) : null);
   } catch (err) { state.settings = mergeSettings(null); }
+  try {
+    var m = storageGet(LS_MEMO_KEY);
+    state.memo = (m === null || m === undefined) ? '' : m;
+  } catch (err) { state.memo = ''; }
 }
 function persistEntries(){ storageSet(LS_ENTRIES_KEY, JSON.stringify(state.entries)); }
 function persistSettings(){ storageSet(LS_SETTINGS_KEY, JSON.stringify(state.settings)); }
+function persistMemo(){ storageSet(LS_MEMO_KEY, state.memo); }
+
+function escapeHtml(s){
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
 
 function cap(k){ return k.charAt(0).toUpperCase()+k.slice(1); }
 
@@ -679,6 +699,60 @@ function buildRetirementSection(metrics){
   return html;
 }
 
+// ---------------- insights ----------------
+function buildInsightsSection(metrics){
+  var insights = [];
+  var r = metrics.readiness;
+
+  // 1. 부동산 편중도
+  if (metrics.allocTotal > 0){
+    var rePctOfTotal = metrics.reVal/metrics.allocTotal*100;
+    if (rePctOfTotal >= 75){
+      insights.push({level:'caution', text:'부동산이 전체 자산의 '+rePctOfTotal.toFixed(0)+'%를 차지해요. 급하게 현금이 필요할 때 유동성이 부족할 수 있어요.'});
+    }
+  }
+
+  // 2. 은퇴 준비율 상태
+  if (r.readinessPct < 50){
+    insights.push({level:'caution', text:'은퇴 준비율이 '+r.readinessPct.toFixed(0)+'%예요. 목표까지 격차가 있으니 저축·투자 계획을 다시 점검해볼 시점일 수 있어요.'});
+  } else if (r.readinessPct < 100){
+    insights.push({level:'info', text:'은퇴 준비율 '+r.readinessPct.toFixed(0)+'%로 순항 중이에요.'});
+  } else {
+    insights.push({level:'good', text:'은퇴 준비율이 '+r.readinessPct.toFixed(0)+'%로 목표를 넘어섰어요.'});
+  }
+
+  // 3. 이번달 저축 여력
+  if (metrics.prev && metrics.savings < 0){
+    insights.push({level:'caution', text:'이번달 생활비가 월급보다 많았어요(저축 여력 마이너스). 지출 구조를 한 번 살펴보면 좋겠어요.'});
+  }
+
+  // 4. 본인/배우자 각자 계좌 쏠림 (특정 항목이 80% 이상)
+  function checkConcentration(stock, total, keys, labels, who){
+    if (total<=0) return;
+    keys.forEach(function(k){
+      var pct = num(stock[k])/total*100;
+      if (pct >= 80){
+        insights.push({level:'info', text:who+' 주식계좌가 '+labels[k]+' 한 항목에 '+pct.toFixed(0)+'% 쏠려있어요. 의도한 배분인지 한 번 확인해보세요.'});
+      }
+    });
+  }
+  checkConcentration(metrics.latest.myStock||emptyMyStock(), metrics.myVal, MY_SECTOR_KEYS, MY_SECTOR_LABELS, '본인');
+  checkConcentration(metrics.latest.spouseStock||emptySpStock(), metrics.spVal, SP_SECTOR_KEYS, SP_SECTOR_LABELS, '배우자');
+
+  var html = '<section class="panel"><h2>AI 점검 <span class="sub">참고용 체크리스트</span></h2>';
+  html += '<p style="font-size:12px;color:var(--ink-faint);margin-bottom:14px;">입력하신 숫자를 기준으로 한 일반적인 재무 체크리스트예요. 세금·법률·개인 상황을 반영한 전문 상담을 대체하지 않아요.</p>';
+  if (insights.length===0){
+    html += '<p style="font-size:13px;color:var(--ink-soft);">특별히 짚이는 항목이 없어요. 꾸준히 기록해보세요.</p>';
+  } else {
+    insights.forEach(function(ins){
+      var icon = ins.level==='caution' ? '⚠️' : (ins.level==='good' ? '✅' : 'ℹ️');
+      html += '<div class="insight-row"><span>'+icon+'</span><span>'+ins.text+'</span></div>';
+    });
+  }
+  html += '</section>';
+  return html;
+}
+
 // ---------------- render ----------------
 function render(){
   var months = sortedMonths(state.entries);
@@ -728,9 +802,18 @@ function render(){
   }
   html += '</section>';
 
+  html += '<section class="panel"><h2>메모</h2>';
+  html += '<textarea id="memoBox" class="memo-box" placeholder="자유롭게 메모를 남겨보세요 (예: 이번달 특이사항, 다음달 계획 등)">'+escapeHtml(state.memo)+'</textarea>';
+  html += '</section>';
+
   html += buildRetirementSection(metrics);
 
+  html += buildInsightsSection(metrics);
+
   dash.innerHTML = html;
+
+  var memoBox = document.getElementById('memoBox');
+  if (memoBox) memoBox.addEventListener('input', function(){ state.memo = this.value; persistMemo(); });
 }
 
 // ---------------- entry modal ----------------
@@ -850,7 +933,7 @@ function saveSettingsForm(){
 
 // ---------------- backup export / import ----------------
 function downloadBackupJSON(){
-  var payloadObj = { entries: state.entries, settings: state.settings, exportedAt: new Date().toISOString() };
+  var payloadObj = { entries: state.entries, settings: state.settings, memo: state.memo, exportedAt: new Date().toISOString() };
   window.__testHooks = window.__testHooks || {};
   window.__testHooks.lastBackupPayload = payloadObj;
   try {
@@ -882,7 +965,8 @@ function handleBackupFileContent(text){
 
   state.entries = obj.entries;
   state.settings = mergeSettings(obj.settings);
-  persistEntries(); persistSettings();
+  state.memo = (typeof obj.memo === 'string') ? obj.memo : '';
+  persistEntries(); persistSettings(); persistMemo();
   render();
   window.alert('백업을 불러왔습니다.');
   return true;
